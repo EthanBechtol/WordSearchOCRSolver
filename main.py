@@ -1,3 +1,4 @@
+import cv2 as cv
 import pytesseract
 import numpy as np
 import os
@@ -22,9 +23,45 @@ def prepare_dir(word):
         print('Exists')
 
 
-def get_np_filled(input):
+def get_canvas_forward(word: str):
+    char_width = 45
+    char_spacing = 32
+    font = cv.FONT_HERSHEY_DUPLEX
+
+    word = str(word)
+    im_width = len(word) * (char_width + char_spacing) - char_spacing
+    canvas = 255 * np.ones(shape=[50, im_width, 3], dtype=np.uint8)
+
+    formatted_word = ''
+    for letter in word:
+        formatted_word += letter.upper() + ' '
+    formatted_word = formatted_word.rstrip()
+
+    cv.putText(canvas, formatted_word, (0, 45), font, 2, (0, 0, 0), 2, cv.LINE_4)
+    return canvas
+
+
+def get_canvas_backward(word: str):
+    return get_canvas_forward(word[::-1])
+
+
+def prepare_word_images(words: dict):
+    # TODO account for different spacing for larger letters (A, H, G, etc) and smaller letters (I, J, etc)
+    for word, orientation in words.items():
+        # FIXME Save to specific dir, not just in cwd
+        # Forward orientation
+        if orientation == "forward":
+            canvas = get_canvas_forward(word)
+            cv.imwrite('canvas.png', canvas)
+
+        elif orientation == "backward":
+            canvas = get_canvas_backward(word)
+            cv.imwrite('canvas.png', canvas)
+
+
+def get_np_filled(input_data):
     separated = []
-    for line in input:
+    for line in input_data:
         separated.append(list(line))
 
     # Make the data into a uniform square with 0's as filler
@@ -85,19 +122,6 @@ def search_for_word(puzzle: list, word: str, diags_backslash, diags_forwardslash
 
 
 def get_diagonals(puzzle: list):
-    separated = []
-    # for line in puzzle:
-    #     separated.append(list(line))
-
-    # # Make the data into a uniform square with 0's as filler
-    # data = np.array([np.array(line) for line in separated])
-    # lens = np.array([len(i) for i in data])
-    # mask = np.arange(lens.max()) < lens[:, None]
-    # out = np.zeros(mask.shape, dtype=data.dtype)
-    # out[mask] = np.concatenate(data)
-    # arr = out
-
-    # Get both diagonals top-left to bottom-right (backslash) & bottom-left to top-right (forwardslash)
     arr = get_np_filled(puzzle)
     diags_forwardslash = [arr[::-1, :].diagonal(i).tolist() for i in range(-arr.shape[0]+1, arr.shape[1])]
     diags_backslash = [arr.diagonal(i).tolist() for i in range(arr.shape[1]-1, -arr.shape[0], -1)]
@@ -122,6 +146,7 @@ def preprocess_puzzle(words: set):
                           .replace(')', ''))  # FIXME Maybe not this one?
 
     diags_backslash, diags_forwardslash = get_diagonals(fixed_list)
+
     # Remove any filler 0s from the sequence to join them
     for diag in diags_backslash:
         while 0 in diag:
