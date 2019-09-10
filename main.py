@@ -188,8 +188,113 @@ def preprocess_puzzle(words: set):
         found_orientation = search_for_word(fixed_list, word, diagstrings_backslash, diagstrings_forwardslash)
         word_orientations[word] = found_orientation
 
-    # print(word_orientations)
+    print(word_orientations)
+    prepare_word_images(word_orientations)
 
+
+# prepare_word_images({"SOMETHING"})
+# prepare_dir('some dir')
+# preprocess_puzzle({'test'})
+
+
+def update_image_with_new_match(reference_image):
+    img_rgb = cv.imread((os.path.join(os.getcwd(), "PuzzleSearchResults", "working.png")))
+    img_gray = cv.cvtColor(img_rgb, cv.COLOR_BGR2GRAY)
+    template = cv.imread(reference_image, 0)
+    w, h = template.shape[::-1]
+
+    res = cv.matchTemplate(img_gray, template, cv.TM_CCOEFF_NORMED)
+
+    # TODO threshold tuning
+    threshold = 0.1
+    loc = np.where(res >= threshold)
+    results = len(list(zip(*loc[::-1])))
+    max_precision_reached = False
+    increments = (0.1, 0.05, 0.01, 0.001)
+    direction = itertools.cycle(('up', 'down'))
+    current_direction = next(direction)
+    current_precision = 0
+    previous_matches = -1
+    while results != 1 and not max_precision_reached:
+        # TODO check function operation
+        if current_direction == 'up':
+            while results != 0:
+                threshold += increments[current_precision]
+
+                loc = np.where(res >= threshold)
+                results = len(list(zip(*loc[::-1])))
+                if results != 0:
+                    previous_matches = results
+
+            threshold -= increments[current_precision]
+
+        elif current_direction == 'down':
+            while results <= previous_matches:
+                threshold -= increments[current_precision]
+
+                loc = np.where(res >= threshold)
+                results = len(list(zip(*loc[::-1])))
+
+            threshold += increments[current_precision]
+
+        current_precision += 1
+        if current_precision >= len(increments):
+            max_precision_reached = True
+
+        current_direction = next(direction)
+        loc = np.where(res >= threshold)
+        results = len(list(zip(*loc[::-1])))
+
+    print(loc)
+    # Color format: (b, g, r)
+    color_choices = ((0, 0, 255),  # red
+                     (0, 255, 0),  # green
+                     (255, 0, 0),  # blue
+                     (0, 128, 255),  # orange
+                     (255, 128, 0),  # light blue
+                     (255, 51, 153),  # red
+                     (255, 51, 255),  # magenta
+                     (102, 51, 0),  # brown
+                     (0, 153, 0),  # dark green
+                     (229, 229, 0),  # cyan
+                     )
+    for pt in zip(*loc[::-1]):
+        cv.rectangle(img_rgb, pt, (pt[0] + w, pt[1] + h), random.choice(color_choices), 1)
+
+    cv.imwrite(os.path.join(os.getcwd(), "PuzzleSearchResults", "working.png"), img_rgb)
+
+
+def draw_results():
+    for root, _, files in os.walk(os.path.join(os.getcwd(), "words")):
+        for name in files:
+            path = os.path.join(root, name)
+            print("Working on:", path)
+
+            update_image_with_new_match(path)
+
+
+def run(inFile: str, words: set, display: bool = False, out: str = None):
+    preprocess_puzzle(words, inFile)
+
+    try:
+        os.mkdir(os.path.join(os.getcwd(), "PuzzleSearchResults"))
+    except FileExistsError:
+        print("CRITICAL ERROR:" + os.path.join(os.getcwd(), "PuzzleSearchResults"),
+              "already exists prior to program start. Unsure if it is safe to write to.")
+        # raise FileExistsError
+        exit(-1)
+    else:
+        img = cv.imread(inFile)
+        cv.imwrite((os.path.join(os.getcwd(), "PuzzleSearchResults", "working.png")), img)
+
+    # FIXME draw results, display image if true, outfile result
+    draw_results()
+    if display:
+        img = cv.imread(os.path.join(os.getcwd(), "PuzzleSearchResults", "working.png"))
+        cv.namedWindow('Puzzle Search Results', cv.WINDOW_NORMAL)
+        cv.imshow('Puzzle Search Results', img)
+        cv.waitKey(0)
+        cv.destroyAllWindows()
 
 
 if __name__ == '__main__':
@@ -197,4 +302,12 @@ if __name__ == '__main__':
     parser.add_argument("-file", nargs=1, help="Specify the puzzle image path to solve.")
     parser.add_argument("-out", nargs=1, help="Select a destination for the output.")
     parser.add_argument("-display", action='store_true')
+    parser.add_argument("-words", nargs='+', help="List the words you would like the program to find.")
 
+    args, unknown_args = parser.parse_known_args()
+    print(args)
+
+    # prepare_dir("plaid")
+    # prepare_word_images({'plaid': 'backward'})
+    run('TestPuzzle.png', {'gourd', 'hogs'}, args.display)
+    # update_image_with_new_match('blank.png')
