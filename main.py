@@ -4,6 +4,9 @@ import numpy as np
 import os
 from PIL import Image
 import argparse
+import itertools
+import random
+import shutil
 
 
 first_dir_pass = True
@@ -32,7 +35,6 @@ def prepare_dir(word):
         print("Made path at " + os.getcwd() + f"/words/{word}")
     except Exception as e:
         print("Something went wrong!", e)
-
 
 
 def get_canvas_forward(word: str):
@@ -79,7 +81,7 @@ def prepare_word_images(words: dict):
 
 
 def get_np_filled(input_data):
-    """Return a valid numpy array given an uneven 2D array by substituting blank spaces with zeros"""
+    """Returns a valid numpy array given an uneven 2D array by substituting blank spaces with zeros"""
     separated = []
     for line in input_data:
         separated.append(list(line))
@@ -104,6 +106,10 @@ def get_columns(puzzle: list):
 
 
 def search_for_word(puzzle: list, word: str, diags_backslash, diags_forwardslash):
+    """
+    Searches the puzzle for the given words and creates a dictionary containing the word and the orientation it was
+    found in
+    """
     # Search for word in horizontal combinations
     target = word.upper()
     for line in puzzle:
@@ -155,9 +161,16 @@ def get_diagonals(puzzle: list):
     return diags_backslash, diags_forwardslash
 
 
-def preprocess_puzzle(words: set):
-    # TODO Change how to select image.
-    image = Image.open('TestPuzzle.png')
+def preprocess_puzzle(words: set, puzzle_location: str):
+    """
+    Uses Google's Tesseract engine to first try and get a text representation of the puzzle and find the orientations
+    of the given words in order to create reference images with which matches may be made on the puzzle image
+    """
+    # Create directories for the words to be used
+    for word in words:
+        prepare_dir(word)
+
+    image = Image.open(puzzle_location)
     raw_list = pytesseract.image_to_string(image, config='--psm 6').splitlines()
     fixed_list = []
     for line in raw_list:
@@ -198,6 +211,10 @@ def preprocess_puzzle(words: set):
 
 
 def update_image_with_new_match(reference_image):
+    """
+    Using a given reference image location, uses OpenCV2 to find the closest matching area on the puzzle
+    and draw a rectangle around it
+    """
     img_rgb = cv.imread((os.path.join(os.getcwd(), "PuzzleSearchResults", "working.png")))
     img_gray = cv.cvtColor(img_rgb, cv.COLOR_BGR2GRAY)
     template = cv.imread(reference_image, 0)
@@ -205,7 +222,7 @@ def update_image_with_new_match(reference_image):
 
     res = cv.matchTemplate(img_gray, template, cv.TM_CCOEFF_NORMED)
 
-    # TODO threshold tuning
+    # Function to narrow down the location of the desired word.
     threshold = 0.1
     loc = np.where(res >= threshold)
     results = len(list(zip(*loc[::-1])))
@@ -258,19 +275,37 @@ def update_image_with_new_match(reference_image):
                      (0, 153, 0),  # dark green
                      (229, 229, 0),  # cyan
                      )
+
+    # Once the locations have been narrowed down, a color may be chosen and rectangles drawn surrounding
+    # the word on the puzzle
+    selected_color = random.choice(color_choices)
     for pt in zip(*loc[::-1]):
-        cv.rectangle(img_rgb, pt, (pt[0] + w, pt[1] + h), random.choice(color_choices), 1)
+        cv.rectangle(img_rgb, pt, (pt[0] + w, pt[1] + h), selected_color, 1)
 
     cv.imwrite(os.path.join(os.getcwd(), "PuzzleSearchResults", "working.png"), img_rgb)
 
 
 def draw_results():
+    """
+    Search through .../words for all word images generated and match them on the puzzle by calling
+    update_image_with_new_match
+    """
     for root, _, files in os.walk(os.path.join(os.getcwd(), "words")):
         for name in files:
             path = os.path.join(root, name)
             print("Working on:", path)
 
             update_image_with_new_match(path)
+
+
+def delete_files():
+    """
+    Remove the files used during this program's operation.
+    Currently: .../PuzzleSearchResults and .../words.
+    These have already been checked to be nonexistent prior to program start, so they are safe to delete.
+    """
+    shutil.rmtree(os.path.join(os.getcwd(), "PuzzleSearchResults"))
+    shutil.rmtree(os.path.join(os.getcwd(), "words"))
 
 
 def run(inFile: str, words: set, display: bool = False, out: str = None):
@@ -287,27 +322,36 @@ def run(inFile: str, words: set, display: bool = False, out: str = None):
         img = cv.imread(inFile)
         cv.imwrite((os.path.join(os.getcwd(), "PuzzleSearchResults", "working.png")), img)
 
-    # FIXME draw results, display image if true, outfile result
     draw_results()
+    if out is not None:
+        img = cv.imread(os.path.join(os.getcwd(), "PuzzleSearchResults", "working.png"))
+        cv.imwrite(out, img)
+
     if display:
+        # FIXME Odd issue sometimes causing a single side of the rectangles to not be displayed.
+        #  Increasing rectangle thickness from 1 to 2 fixes its display,
+        #  yet issue is never present when opening the saved file.
         img = cv.imread(os.path.join(os.getcwd(), "PuzzleSearchResults", "working.png"))
         cv.namedWindow('Puzzle Search Results', cv.WINDOW_NORMAL)
         cv.imshow('Puzzle Search Results', img)
         cv.waitKey(0)
         cv.destroyAllWindows()
 
+    delete_files()
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("-file", nargs=1, help="Specify the puzzle image path to solve.")
-    parser.add_argument("-out", nargs=1, help="Select a destination for the output.")
-    parser.add_argument("-display", action='store_true')
     parser.add_argument("-words", nargs='+', help="List the words you would like the program to find.")
+    parser.add_argument("-out", nargs=1, help="Select a destination for the output.")
+    parser.add_argument("-display", action='store_true', help="If added, will display any results in a new window.")
 
     args, unknown_args = parser.parse_known_args()
-    print(args)
 
-    # prepare_dir("plaid")
-    # prepare_word_images({'plaid': 'backward'})
-    run('TestPuzzle.png', {'gourd', 'hogs'}, args.display)
-    # update_image_with_new_match('blank.png')
+    if not args.file or not args.words:
+        print("ERROR: You must supply a file location and words to search for!")
+        parser.print_help()
+    else:
+        out = args.out[0] if args.out else None
+        run(args.file[0], set(args.words), args.display, out)
