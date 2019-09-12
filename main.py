@@ -60,6 +60,31 @@ def get_canvas_backward(word: str):
     return get_canvas_forward(word[::-1])
 
 
+def get_canvas_down(word: str):
+    letter_spacing = 36
+    letter_height = 38
+    padding = 18
+    font = cv.FONT_HERSHEY_DUPLEX
+
+    word = str(word.upper())
+    im_height = len(word) * (letter_height + letter_spacing) - letter_spacing + padding * 2
+    canvas = 255 * np.ones(shape=[im_height, 55, 3], dtype=np.uint8)
+
+    current_position = padding + letter_height
+    for letter in word:
+        if letter == 'I':
+            cv.putText(canvas, letter, (14, current_position), font, 2, (0, 0, 0), 2, cv.LINE_4)
+        else:
+            cv.putText(canvas, letter, (2, current_position), font, 2, (0, 0, 0), 2, cv.LINE_4)
+        current_position += letter_height + letter_spacing
+
+    return canvas
+
+
+def get_canvas_up(word: str):
+    return get_canvas_down(word[::-1])
+
+
 def prepare_word_images(words: dict):
     """
     Create images containing the given dict of word:orientation in their proper orientations to be used
@@ -77,6 +102,14 @@ def prepare_word_images(words: dict):
 
         elif orientation == "backward":
             canvas = get_canvas_backward(word)
+            cv.imwrite(os.path.join(os.getcwd(), "words", word, f'{word}_{orientation}.png'), canvas)
+
+        elif orientation == "down":
+            canvas = get_canvas_down(word)
+            cv.imwrite(os.path.join(os.getcwd(), "words", word, f'{word}_{orientation}.png'), canvas)
+
+        elif orientation == "up":
+            canvas = get_canvas_up(word)
             cv.imwrite(os.path.join(os.getcwd(), "words", word, f'{word}_{orientation}.png'), canvas)
 
 
