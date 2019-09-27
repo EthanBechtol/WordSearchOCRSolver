@@ -289,15 +289,14 @@ def preprocess_puzzle(words: set, puzzle_location: str):
         prepare_dir(word)
 
     image = Image.open(puzzle_location)
-    raw_list = pytesseract.image_to_string(image, config='--psm 6').splitlines()
+
+    raw_list = pytesseract.image_to_string(image,
+                                           config='--psm 6 -c load_punc_dawg=F -c load_number_dawg=F -c load_unambig_dawg=F -c load_bigram_dawg=F -c load_fixed_length_dawgs=F -c load_freq_dawg=F -c load_system_dawg=F -c tessedit_char_whitelist=QWERTYUIOPASDFGHJKLZXCVBNM').splitlines()
     fixed_list = []
     for line in raw_list:
-        fixed_list.append(line.rstrip(' |.-')
-                          .replace(' ', '')
-                          .replace('|', 'I')
-                          .replace('1', 'I')
-                          .replace('!', 'I')
-                          .replace(')', ''))  # FIXME Maybe not this one?
+        if line != '':
+            print(line)
+            fixed_list.append(line.rstrip(' |.-'))
 
     diags_backslash, diags_forwardslash = get_diagonals(fixed_list)
 
@@ -312,7 +311,6 @@ def preprocess_puzzle(words: set, puzzle_location: str):
 
     diagstrings_backslash = ["".join(diag) for diag in diags_backslash]
     diagstrings_forwardslash = ["".join(diag) for diag in diags_forwardslash]
-    # print(diagstrings_forwardslash)
 
     # Search the puzzle for target words and return their found orientation (None if not found)
     word_orientations = {}
@@ -341,13 +339,14 @@ def update_image_with_new_match(reference_image, marking="rectangle"):
     loc = np.where(res >= threshold)
     results = len(list(zip(*loc[::-1])))
     max_precision_reached = False
-    increments = (0.1, 0.05, 0.01, 0.001)
+    max_precision_attempts = 10
+    precision_attempts = 0
+    increments = (0.1, 0.05, 0.01, 0.001, 0.0001)
     direction = itertools.cycle(('up', 'down'))
     current_direction = next(direction)
     current_precision = 0
     previous_matches = -1
-    while results != 1 and not max_precision_reached:
-        # TODO check function operation
+    while results != 1 and max_precision_attempts != precision_attempts:
         if current_direction == 'up':
             while results != 0:
                 threshold += increments[current_precision]
@@ -368,9 +367,13 @@ def update_image_with_new_match(reference_image, marking="rectangle"):
 
             threshold += increments[current_precision]
 
-        current_precision += 1
-        if current_precision >= len(increments):
+        if current_precision >= len(increments) - 1:
             max_precision_reached = True
+
+        if not max_precision_reached:
+            current_precision += 1
+        else:
+            precision_attempts += 1
 
         current_direction = next(direction)
         loc = np.where(res >= threshold)
