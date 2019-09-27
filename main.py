@@ -120,6 +120,40 @@ def get_canvas_rbackslash(word: str):  # bottom-right to top-left
     return get_canvas_backslash(word[::-1])
 
 
+def get_canvas_forwardslash(word: str):  # bottom-left to top-right
+    letter_height_spacing = 36
+    letter_height = 38
+    padding_height = 18
+
+    letter_width = 42
+    font = cv.FONT_HERSHEY_DUPLEX
+
+    word = str(word.upper())
+    im_height = len(word) * (letter_height + letter_height_spacing) - letter_height_spacing + padding_height * 2
+    im_width = len(word) * 72 - 24
+    canvas = 255 * np.zeros(shape=[im_height, im_width, 4], dtype=np.uint8)
+
+    current_position_y = im_height - (padding_height + letter_height) + letter_height
+    current_position_x = 0
+    for letter in word:
+        if letter == '$':
+            cv.putText(canvas, letter, (current_position_x, current_position_y), font, 2, (0, 0, 0, 255), 2, cv.LINE_4)
+        else:
+            rect_pt1 = (current_position_x - 13, current_position_y + 20)
+            rect_pt2 = (current_position_x + letter_width + 13, current_position_y - letter_height - 20)
+            cv.rectangle(canvas, rect_pt1, rect_pt2, (255, 255, 255, 255), -1)
+            cv.putText(canvas, letter, (current_position_x, current_position_y), font, 2, (0, 0, 0, 255), 2, cv.LINE_4)
+        current_position_y -= letter_height + letter_height_spacing
+        current_position_x += 72
+
+    cv.imwrite("backslash_test.png", canvas)
+    return canvas
+
+
+def get_canvas_rforwardslash(word: str):  # top-right to bottom-left
+    return get_canvas_forwardslash(word[::-1])
+
+
 def prepare_word_images(words: dict):
     """
     Create images containing the given dict of word:orientation in their proper orientations to be used
@@ -153,6 +187,14 @@ def prepare_word_images(words: dict):
 
         elif orientation == "rbackslash":
             canvas = get_canvas_rbackslash(word)
+            cv.imwrite(os.path.join(os.getcwd(), "words", word, f'{word}_{orientation}.png'), canvas)
+
+        elif orientation == "forwardslash":
+            canvas = get_canvas_forwardslash(word)
+            cv.imwrite(os.path.join(os.getcwd(), "words", word, f'{word}_{orientation}.png'), canvas)
+
+        elif orientation == "rforwardslash":
+            canvas = get_canvas_rforwardslash(word)
             cv.imwrite(os.path.join(os.getcwd(), "words", word, f'{word}_{orientation}.png'), canvas)
 
 
@@ -287,7 +329,7 @@ def update_image_with_new_match(reference_image, marking="rectangle"):
     Using a given reference image location, uses OpenCV2 to find the closest matching area on the puzzle
     and draw a rectangle around it
     """
-    img_rgb = cv.imread((os.path.join(os.getcwd(), "PuzzleSearchResults", "working.png")))
+    img_rgb = cv.imread((os.path.join(os.getcwd(), "PuzzleSearchResults", "original.png")))
     img_gray = cv.cvtColor(img_rgb, cv.COLOR_BGR2GRAY)
     template = cv.imread(reference_image, 0)
     w, h = template.shape[::-1]
@@ -350,12 +392,16 @@ def update_image_with_new_match(reference_image, marking="rectangle"):
 
     # Once the locations have been narrowed down, a color may be chosen and rectangles drawn surrounding
     # the word on the puzzle
+    img_rgb = cv.imread((os.path.join(os.getcwd(), "PuzzleSearchResults", "working.png")))
     selected_color = random.choice(color_choices)
     for pt in zip(*loc[::-1]):
         if marking == "rectangle":
             cv.rectangle(img_rgb, pt, (pt[0] + w, pt[1] + h), selected_color, 2)
         elif marking == "line":
             cv.line(img_rgb, pt, (pt[0] + w, pt[1] + h), selected_color, 2)
+        elif marking == "fline":
+            p = ((pt[0], pt[1] + h), (pt[0] + w, pt[1]))
+            cv.line(img_rgb, p[0], p[1], (0, 0, 255), 2)
 
     cv.imwrite(os.path.join(os.getcwd(), "PuzzleSearchResults", "working.png"), img_rgb)
 
@@ -371,7 +417,9 @@ def draw_results():
             print("Working on:", path)
             separated_name = name.split("_")
             print(separated_name)
-            if "slash" in separated_name[-1]:
+            if "forward" in separated_name[-1]:
+                update_image_with_new_match(path, "fline")
+            elif "slash" in separated_name[-1]:
                 update_image_with_new_match(path, "line")
             else:
                 update_image_with_new_match(path, "rectangle")
@@ -406,6 +454,8 @@ def run(inFile: str, words: set, display: bool = False, out: str = None):
     else:
         resize_image(inFile)
 
+    img = cv.imread(os.path.join(os.getcwd(), "PuzzleSearchResults", "working.png"))
+    cv.imwrite(os.path.join(os.getcwd(), "PuzzleSearchResults", "original.png"), img)
     preprocess_puzzle(words, os.path.join(os.getcwd(), "PuzzleSearchResults", "working.png"))
 
     draw_results()
