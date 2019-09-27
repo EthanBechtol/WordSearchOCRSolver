@@ -37,30 +37,31 @@ def prepare_dir(word):
         print("Something went wrong!", e)
 
 
-def get_canvas_forward(word: str):
+def get_canvas_forward(word: str):  # left to right
     """Create & return an image containing the given word on a blank canvas to be used for matching"""
-    char_width = 42
-    char_spacing = 32
     font = cv.FONT_HERSHEY_DUPLEX
 
     word = str(word)
-    im_width = len(word) * (char_width + char_spacing) - char_spacing
+    im_width = len(word) * 72 - 28
     canvas = 255 * np.ones(shape=[50, im_width, 3], dtype=np.uint8)
 
-    formatted_word = ''
-    for letter in word:
-        formatted_word += letter.upper() + ' '
-    formatted_word = formatted_word.rstrip()
+    curr_x_pos = 0
+    for letter in word.upper():
+        if letter == 'I':
+            cv.putText(canvas, letter, (curr_x_pos + 13, 45), font, 2, (0, 0, 0), 2, cv.LINE_4)
 
-    cv.putText(canvas, formatted_word, (0, 45), font, 2, (0, 0, 0), 2, cv.LINE_4)
+        else:
+            cv.putText(canvas, letter, (curr_x_pos, 45), font, 2, (0, 0, 0), 2, cv.LINE_4)
+        curr_x_pos += 72
+
     return canvas
 
 
-def get_canvas_backward(word: str):
+def get_canvas_backward(word: str):  # right to left
     return get_canvas_forward(word[::-1])
 
 
-def get_canvas_down(word: str):
+def get_canvas_down(word: str):  # top to bottom
     letter_spacing = 36
     letter_height = 38
     padding = 18
@@ -81,7 +82,7 @@ def get_canvas_down(word: str):
     return canvas
 
 
-def get_canvas_up(word: str):
+def get_canvas_up(word: str):  # bottom to top
     return get_canvas_down(word[::-1])
 
 
@@ -91,19 +92,15 @@ def get_canvas_backslash(word: str):  # top-left to bottom-right
     padding_height = 18
 
     letter_width = 42
-    letter_width_spacing = 32
     font = cv.FONT_HERSHEY_DUPLEX
 
     word = str(word.upper())
     im_height = len(word) * (letter_height + letter_height_spacing) - letter_height_spacing + padding_height * 2
-    im_width = len(word) * (letter_width + letter_width_spacing) - letter_width_spacing
+    im_width = len(word) * 72 - 24
     canvas = 255 * np.zeros(shape=[im_height, im_width, 4], dtype=np.uint8)
 
-    width_step = im_width // len(word)
-    print(width_step)
     current_position_y = padding_height + letter_height
-    current_position_x = 2
-    current_letter_pos = 0
+    current_position_x = 0
     for letter in word:
         if letter == '$':
             cv.putText(canvas, letter, (current_position_x, current_position_y), font, 2, (0, 0, 0, 255), 2, cv.LINE_4)
@@ -113,8 +110,7 @@ def get_canvas_backslash(word: str):  # top-left to bottom-right
             cv.rectangle(canvas, rect_pt1, rect_pt2, (255, 255, 255, 255), -1)
             cv.putText(canvas, letter, (current_position_x, current_position_y), font, 2, (0, 0, 0, 255), 2, cv.LINE_4)
         current_position_y += letter_height + letter_height_spacing
-        current_letter_pos += 1
-        current_position_x = width_step * current_letter_pos + 18
+        current_position_x += 72
 
     cv.imwrite("backslash_test.png", canvas)
     return canvas
@@ -284,11 +280,6 @@ def preprocess_puzzle(words: set, puzzle_location: str):
 
     print(word_orientations)
     prepare_word_images(word_orientations)
-
-
-# prepare_word_images({"SOMETHING"})
-# prepare_dir('some dir')
-# preprocess_puzzle({'test'})
 
 
 def update_image_with_new_match(reference_image, marking="rectangle"):
