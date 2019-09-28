@@ -154,6 +154,32 @@ def get_canvas_rforwardslash(word: str):  # top-right to bottom-left
     return get_canvas_forwardslash(word[::-1])
 
 
+def generate_all_canvases(word):
+    canvas = get_canvas_forward(word)
+    cv.imwrite(os.path.join(os.getcwd(), "words", word, f'{word}_forward.png'), canvas)
+
+    canvas = get_canvas_backward(word)
+    cv.imwrite(os.path.join(os.getcwd(), "words", word, f'{word}_backward.png'), canvas)
+
+    canvas = get_canvas_down(word)
+    cv.imwrite(os.path.join(os.getcwd(), "words", word, f'{word}_down.png'), canvas)
+
+    canvas = get_canvas_up(word)
+    cv.imwrite(os.path.join(os.getcwd(), "words", word, f'{word}_up.png'), canvas)
+
+    canvas = get_canvas_backslash(word)
+    cv.imwrite(os.path.join(os.getcwd(), "words", word, f'{word}_backslash.png'), canvas)
+
+    canvas = get_canvas_rbackslash(word)
+    cv.imwrite(os.path.join(os.getcwd(), "words", word, f'{word}_rbackslash.png'), canvas)
+
+    canvas = get_canvas_forwardslash(word)
+    cv.imwrite(os.path.join(os.getcwd(), "words", word, f'{word}_forwardslash.png'), canvas)
+
+    canvas = get_canvas_rforwardslash(word)
+    cv.imwrite(os.path.join(os.getcwd(), "words", word, f'{word}_rforwardslash.png'), canvas)
+
+
 def prepare_word_images(words: dict):
     """
     Create images containing the given dict of word:orientation in their proper orientations to be used
@@ -196,6 +222,9 @@ def prepare_word_images(words: dict):
         elif orientation == "rforwardslash":
             canvas = get_canvas_rforwardslash(word)
             cv.imwrite(os.path.join(os.getcwd(), "words", word, f'{word}_{orientation}.png'), canvas)
+
+        elif orientation is None:
+            generate_all_canvases(word)
 
 
 def get_np_filled(input_data):
@@ -322,7 +351,7 @@ def preprocess_puzzle(words: set, puzzle_location: str):
     prepare_word_images(word_orientations)
 
 
-def update_image_with_new_match(reference_image, marking="rectangle"):
+def update_image_with_new_match(reference_image, marking="rectangle", threshold=None, test_only=False):
     """
     Using a given reference image location, uses OpenCV2 to find the closest matching area on the puzzle
     and draw a rectangle around it
@@ -331,53 +360,59 @@ def update_image_with_new_match(reference_image, marking="rectangle"):
     img_gray = cv.cvtColor(img_rgb, cv.COLOR_BGR2GRAY)
     template = cv.imread(reference_image, 0)
     w, h = template.shape[::-1]
-
     res = cv.matchTemplate(img_gray, template, cv.TM_CCOEFF_NORMED)
 
-    # Function to narrow down the location of the desired word.
-    threshold = 0.0
-    loc = np.where(res >= threshold)
-    results = len(list(zip(*loc[::-1])))
-    max_precision_reached = False
-    max_precision_attempts = 10
-    precision_attempts = 0
-    increments = (0.1, 0.05, 0.01, 0.001, 0.0001)
-    direction = itertools.cycle(('up', 'down'))
-    current_direction = next(direction)
-    current_precision = 0
-    previous_matches = -1
-    while results != 1 and max_precision_attempts != precision_attempts:
-        if current_direction == 'up':
-            while results != 0:
-                threshold += increments[current_precision]
-
-                loc = np.where(res >= threshold)
-                results = len(list(zip(*loc[::-1])))
-                if results != 0:
-                    previous_matches = results
-
-            threshold -= increments[current_precision]
-
-        elif current_direction == 'down':
-            while results <= previous_matches:
-                threshold -= increments[current_precision]
-
-                loc = np.where(res >= threshold)
-                results = len(list(zip(*loc[::-1])))
-
-            threshold += increments[current_precision]
-
-        if current_precision >= len(increments) - 1:
-            max_precision_reached = True
-
-        if not max_precision_reached:
-            current_precision += 1
-        else:
-            precision_attempts += 1
-
-        current_direction = next(direction)
+    if threshold is None:
+        # Function to narrow down the location of the desired word.
+        threshold = 0.0
         loc = np.where(res >= threshold)
         results = len(list(zip(*loc[::-1])))
+        max_precision_reached = False
+        max_precision_attempts = 10
+        precision_attempts = 0
+        increments = (0.1, 0.05, 0.01, 0.001, 0.0001)
+        direction = itertools.cycle(('up', 'down'))
+        current_direction = next(direction)
+        current_precision = 0
+        previous_matches = -1
+        while results != 1 and max_precision_attempts != precision_attempts:
+            if current_direction == 'up':
+                while results != 0:
+                    threshold += increments[current_precision]
+
+                    loc = np.where(res >= threshold)
+                    results = len(list(zip(*loc[::-1])))
+                    if results != 0:
+                        previous_matches = results
+
+                threshold -= increments[current_precision]
+
+            elif current_direction == 'down':
+                while results <= previous_matches:
+                    threshold -= increments[current_precision]
+
+                    loc = np.where(res >= threshold)
+                    results = len(list(zip(*loc[::-1])))
+
+                threshold += increments[current_precision]
+
+            if current_precision >= len(increments) - 1:
+                max_precision_reached = True
+
+            if not max_precision_reached:
+                current_precision += 1
+            else:
+                precision_attempts += 1
+
+            current_direction = next(direction)
+            loc = np.where(res >= threshold)
+            results = len(list(zip(*loc[::-1])))
+        if test_only:
+            return threshold
+    else:
+        # If a threshold is given, no time should be wasted testing values
+        res = cv.matchTemplate(img_gray, template, cv.TM_CCOEFF_NORMED)
+        loc = np.where(res >= threshold)
 
     print(loc)
     # Color format: (b, g, r)
@@ -409,23 +444,69 @@ def update_image_with_new_match(reference_image, marking="rectangle"):
     cv.imwrite(os.path.join(os.getcwd(), "PuzzleSearchResults", "working.png"), img_rgb)
 
 
+def find_best_match(word):
+    paths = (os.path.join(os.getcwd(), "words", word, f"{word}_forward.png"),
+             os.path.join(os.getcwd(), "words", word, f"{word}_backward.png"),
+             os.path.join(os.getcwd(), "words", word, f"{word}_up.png"),
+             os.path.join(os.getcwd(), "words", word, f"{word}_down.png"),
+             os.path.join(os.getcwd(), "words", word, f"{word}_backslash.png"),
+             os.path.join(os.getcwd(), "words", word, f"{word}_rbackslash.png"),
+             os.path.join(os.getcwd(), "words", word, f"{word}_forwardslash.png"),
+             os.path.join(os.getcwd(), "words", word, f"{word}_rforwardslash.png"))
+
+    threshold_results = {"forward": None,
+                         "backward": None,
+                         "up": None,
+                         "down": None,
+                         "backslash": None,
+                         "rbackslash": None,
+                         "forwardslash": None,
+                         "rforwardslash": None}
+
+    search_order = ("forward", "backward", "up", "down", "backslash", "rbackslash", "forwardslash", "rforwardslash")
+    for num, path in enumerate(paths):
+        threshold_results[search_order[num]] = update_image_with_new_match(path, test_only=True)
+
+    best_orientation = max(threshold_results, key=lambda key: threshold_results[key])
+    return best_orientation, threshold_results[best_orientation]
+
+
 def draw_results():
     """
     Search through .../words for all word images generated and match them on the puzzle by calling
     update_image_with_new_match
     """
+    # Count how many files contain a word. If a match was not found, there will be more than one and should be handled
+    # accordingly
+    word_image_count = {}
+    for root, _, files in os.walk(os.path.join(os.getcwd(), "words")):
+        for name in files:
+            separated_name = name.split("_")
+            if separated_name[0] in word_image_count:
+                word_image_count[separated_name[0]] += 1
+            else:
+                word_image_count[separated_name[0]] = 1
+
+    processed_words = set()
     for root, _, files in os.walk(os.path.join(os.getcwd(), "words")):
         for name in files:
             path = os.path.join(root, name)
             print("Working on:", path)
             separated_name = name.split("_")
             print(separated_name)
-            if "forward" in separated_name[-1]:
-                update_image_with_new_match(path, "fline")
-            elif "slash" in separated_name[-1]:
-                update_image_with_new_match(path, "line")
+            if word_image_count[separated_name[0]] == 1:
+                if "forwardslash" in separated_name[-1]:
+                    update_image_with_new_match(path, "fline")
+                elif "slash" in separated_name[-1]:
+                    update_image_with_new_match(path, "line")
+                else:
+                    update_image_with_new_match(path, "rectangle")
             else:
-                update_image_with_new_match(path, "rectangle")
+                if separated_name[0] not in processed_words:
+                    best_orientation, threshold = find_best_match(separated_name[0])
+                    ending = str(separated_name[0]) + "_" + best_orientation + ".png"
+                    update_image_with_new_match(os.path.join(root, ending), threshold=threshold)
+                    processed_words.add(separated_name[0])
 
 
 def delete_files():
@@ -467,9 +548,6 @@ def run(inFile: str, words: set, display: bool = False, out: str = None):
         cv.imwrite(out, img)
 
     if display:
-        # FIXME Odd issue sometimes causing a single side of the rectangles to not be displayed.
-        #  Increasing rectangle thickness from 1 to 2 fixes its display,
-        #  yet issue is never present when opening the saved file.
         img = cv.imread(os.path.join(os.getcwd(), "PuzzleSearchResults", "working.png"))
         cv.namedWindow('Puzzle Search Results', cv.WINDOW_NORMAL)
         cv.imshow('Puzzle Search Results', img)
