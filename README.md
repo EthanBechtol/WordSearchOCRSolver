@@ -28,3 +28,9 @@ usage: main.py [-file FILE] [-words WORDS [WORDS ...]] [-out OUT]
 
 Sample usage:
 -file TestPuzzle5.png -display -out outfilelocation.png -words ANAESTHESIA BRAVOS EDIFIES EXPURGATING FASHIONED GRANDSTANDED HAFNIUM IMBROGLIOS JOISTS LIAISED MINDFUL MOSS OVERRUNNING PADRE QUAYS SLEEPYHEAD STYE SUPEREGO TALLER VOTES YOLK YUKS ZIGZAGS ZOOS
+
+Sample Input/Output
+---
+
+![SampleInput5](/TestPuzzle5.png)
+<img src="https://github.com/EthanBechtol/WordSearchOCRSolverImages/blob/master/SampleOutput5.png" alt="Sample Output 5" width="641" height="561">
