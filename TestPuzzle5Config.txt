@@ -1,0 +1,7 @@
+Example run config:
+-file TestPuzzle5.png -display -out outfiletesting.png -words ANAESTHESIA BRAVOS EDIFIES EXPURGATING FASHIONED GRANDSTANDED HAFNIUM IMBROGLIOS JOISTS LIAISED MINDFUL MOSS OVERRUNNING PADRE QUAYS SLEEPYHEAD STYE SUPEREGO TALLER VOTES YOLK YUKS ZIGZAGS ZOOS
+
+If you encounter a "TesseractNotFoundError", add the following (and change the name to your user name):
+-tesseract C:\Users\YOUR_NAME_HERE\AppData\Local\Tesseract-OCR\tesseract.exe
+
+This is the default installation location for most users, however if you installed it elsewhere, change the path.
