@@ -16,7 +16,7 @@ Usage
 usage: main.py [-file FILE] [-words WORDS [WORDS ...]] [-out OUT]
                [-display] [-tesseract TESSERACT]
 
-####optional arguments:
+### Arguments:
 
 | Argument   | Parameters       | Description
 -------------|:----------------:|------------
